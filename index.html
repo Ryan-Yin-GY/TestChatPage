@@ -9,46 +9,6 @@
     <h1>Hello World! This is my public test page.</h1>
 
 <script type='text/javascript'>
-	function goodyearIsMobileBrowser() {
-		var ua = navigator.userAgent || '';
-		return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-	}
-
-	function hideSalesforceChatButton() {
-		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
-		if (!api || typeof api.hideChatButton !== 'function') {
-			return;
-		}
-		try {
-			var result = api.hideChatButton();
-			if (result && typeof result.catch === 'function') {
-				result.catch(function () {});
-			}
-		} catch (err) {
-			console.warn('[Goodyear Chat] hideChatButton failed:', err);
-		}
-	}
-
-	function keepSalesforceChatButtonHidden() {
-		hideSalesforceChatButton();
-		var attempts = 0;
-		var timer = setInterval(function () {
-			hideSalesforceChatButton();
-			attempts += 1;
-			if (attempts >= 15) {
-				clearInterval(timer);
-			}
-		}, 200);
-	}
-
-	// Mobile only: hide Salesforce's default launcher. Desktop keeps the original button.
-	if (goodyearIsMobileBrowser()) {
-		window.addEventListener('onEmbeddedMessagingButtonCreated', keepSalesforceChatButtonHidden);
-		window.addEventListener('onEmbeddedMessagingWindowMinimized', keepSalesforceChatButtonHidden);
-		window.addEventListener('onEmbeddedMessagingWindowClosed', keepSalesforceChatButtonHidden);
-		window.addEventListener('onEmbeddedMessagingConversationClosed', keepSalesforceChatButtonHidden);
-	}
-
 	function initEmbeddedMessaging() {
 		if (!document.body) {
 			document.addEventListener('DOMContentLoaded', initEmbeddedMessaging);
@@ -58,7 +18,6 @@
 		try {
 			embeddedservice_bootstrap.settings.language = 'en_US'; // For example, enter 'en' or 'en-US'
 			embeddedservice_bootstrap.settings.display = 'Chat with Support';
-			embeddedservice_bootstrap.settings.hideChatButtonOnLoad = goodyearIsMobileBrowser();
 			embeddedservice_bootstrap.init(
 				'00DTI000002wPxm',
 				'GY_Service_Chat_Support',
@@ -254,11 +213,11 @@
 })();
 
 // =======================================================================
-// FEATURE 4: Mobile-only custom launcher (44px). Desktop keeps the original
-// Salesforce "Start a Chat" button. After minimize on mobile, hide that
-// original control so only the custom circle remains.
+// FEATURE 4: Custom mobile launcher — paused while desktop is verified.
+// Desktop must use Salesforce's original "Start a Chat" button only.
 // =======================================================================
 (function initGoodyearCustomChatButton() {
+    return;
     if (window.goodyearCustomChatButtonInitialized) {
         return;
     }
