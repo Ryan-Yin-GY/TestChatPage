@@ -11,10 +11,19 @@
 <script type='text/javascript'>
 	function goodyearIsMobileBrowser() {
 		var ua = navigator.userAgent || '';
-		return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+		if (/Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+			return true;
+		}
+		if (navigator.userAgentData && navigator.userAgentData.mobile === true) {
+			return true;
+		}
+		return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
 	}
 
 	function hideSalesforceChatButton() {
+		if (!goodyearIsMobileBrowser()) {
+			return;
+		}
 		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
 		if (!api || typeof api.hideChatButton !== 'function') {
 			return;
@@ -29,12 +38,25 @@
 		}
 	}
 
+	function showSalesforceChatButton() {
+		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+		if (!api || typeof api.showChatButton !== 'function') {
+			return;
+		}
+		try {
+			var result = api.showChatButton();
+			if (result && typeof result.catch === 'function') {
+				result.catch(function () {});
+			}
+		} catch (err) {
+			console.warn('[Goodyear Chat] showChatButton failed:', err);
+		}
+	}
+
 	// Mobile: hide the default launcher on create and again after minimize.
 	// https://developer.salesforce.com/docs/service/messaging-web/guide/show-hide-chat.html
-	if (goodyearIsMobileBrowser()) {
-		window.addEventListener('onEmbeddedMessagingButtonCreated', hideSalesforceChatButton);
-		window.addEventListener('onEmbeddedMessagingWindowMinimized', hideSalesforceChatButton);
-	}
+	window.addEventListener('onEmbeddedMessagingButtonCreated', hideSalesforceChatButton);
+	window.addEventListener('onEmbeddedMessagingWindowMinimized', hideSalesforceChatButton);
 
 	function initEmbeddedMessaging() {
 		if (!document.body) {
@@ -255,11 +277,19 @@
     }
     window.goodyearCustomChatButtonInitialized = true;
 
-    if (typeof goodyearIsMobileBrowser !== 'function' || !goodyearIsMobileBrowser()) {
-        return;
-    }
-
     var BUTTON_ID = 'gyCustomChatButton';
+    var chatWindowIsOpen = false;
+
+    function isMobileBrowser() {
+        if (typeof goodyearIsMobileBrowser === 'function') {
+            return goodyearIsMobileBrowser();
+        }
+        var ua = navigator.userAgent || '';
+        if (/Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+            return true;
+        }
+        return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+    }
 
     function injectStyles() {
         if (document.getElementById('gy-custom-chat-button-styles')) {
@@ -270,13 +300,13 @@
         style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
-            '.embeddedMessagingConversationButtonWrapper,' +
-            '#embeddedMessagingConversationButton,' +
-            'button.embeddedMessagingConversationButton{' +
+            'html.gy-chat-is-mobile .embeddedMessagingConversationButtonWrapper,' +
+            'html.gy-chat-is-mobile #embeddedMessagingConversationButton,' +
+            'html.gy-chat-is-mobile button.embeddedMessagingConversationButton{' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
             '}' +
-            'iframe.embeddedMessagingFrame.isMinimized{' +
+            'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.isMinimized{' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
             '}' +
@@ -284,11 +314,12 @@
             'position:fixed;z-index:2147483001;right:12px;bottom:12px;' +
             'width:44px;height:44px;padding:0;border:0;border-radius:50%;' +
             'background:#FFCC00;color:#111;cursor:pointer;' +
-            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:flex !important;' +
+            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:none !important;' +
             'align-items:center;justify-content:center;' +
             '}' +
             '#' + BUTTON_ID + ' svg{width:20px;height:20px;display:block;}' +
-            '#' + BUTTON_ID + '.is-hidden{display:none !important;}' +
+            'html.gy-chat-is-mobile #' + BUTTON_ID + '{display:flex !important;}' +
+            'html.gy-chat-is-mobile #' + BUTTON_ID + '.is-hidden{display:none !important;}' +
             '#' + BUTTON_ID + ':disabled{opacity:.7;cursor:wait;}'
         ));
         (document.head || document.documentElement).appendChild(style);
@@ -368,7 +399,7 @@
 
     function waitForChatApi() {
         if (isLaunchApiReady()) {
-            showCustomButton();
+            applyMobileMode();
             return;
         }
 
@@ -377,40 +408,72 @@
             attempts += 1;
             if (isLaunchApiReady() || attempts >= 40) {
                 clearInterval(timer);
-                showCustomButton();
+                applyMobileMode();
             }
         }, 250);
     }
 
+    function applyMobileMode() {
+        var mobile = isMobileBrowser();
+        document.documentElement.classList.toggle('gy-chat-is-mobile', mobile);
+
+        if (mobile) {
+            ensureCustomButton();
+            if (typeof hideSalesforceChatButton === 'function') {
+                hideSalesforceChatButton();
+            }
+            if (chatWindowIsOpen) {
+                hideCustomButton();
+            } else {
+                showCustomButton();
+            }
+            return;
+        }
+
+        hideCustomButton();
+        if (typeof showSalesforceChatButton === 'function') {
+            showSalesforceChatButton();
+        }
+    }
+
     injectStyles();
     ensureCustomButton();
+    applyMobileMode();
     waitForChatApi();
 
-    window.addEventListener('onEmbeddedMessagingReady', function () {
-        hideSalesforceChatButton();
-        showCustomButton();
-    });
+    window.addEventListener('resize', applyMobileMode);
+    window.addEventListener('orientationchange', applyMobileMode);
+    if (window.matchMedia) {
+        var mobileQuery = window.matchMedia('(max-width: 768px)');
+        if (mobileQuery.addEventListener) {
+            mobileQuery.addEventListener('change', applyMobileMode);
+        } else if (mobileQuery.addListener) {
+            mobileQuery.addListener(applyMobileMode);
+        }
+    }
 
-    window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
-        hideSalesforceChatButton();
-        showCustomButton();
-    });
+    window.addEventListener('onEmbeddedMessagingReady', applyMobileMode);
 
-    window.addEventListener('onEmbeddedMessagingWindowMaximized', hideCustomButton);
+    window.addEventListener('onEmbeddedMessagingButtonCreated', applyMobileMode);
+
+    window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
+        chatWindowIsOpen = true;
+        hideCustomButton();
+    });
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
-        hideSalesforceChatButton();
-        showCustomButton();
+        chatWindowIsOpen = false;
+        applyMobileMode();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
-        hideSalesforceChatButton();
-        showCustomButton();
+        chatWindowIsOpen = false;
+        applyMobileMode();
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
-        hideSalesforceChatButton();
-        showCustomButton();
+        chatWindowIsOpen = false;
+        applyMobileMode();
     });
 })();
 </script>
