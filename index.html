@@ -255,6 +255,12 @@
         style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
+            '.embeddedMessagingConversationButtonWrapper,' +
+            '#embeddedMessagingConversationButton,' +
+            'button.embeddedMessagingConversationButton{' +
+            'display:none !important;visibility:hidden !important;' +
+            'opacity:0 !important;pointer-events:none !important;' +
+            '}' +
             '#' + BUTTON_ID + '{' +
             'position:fixed;z-index:2147483000;right:30px;bottom:25px;' +
             'width:60px;height:60px;padding:0;border:0;border-radius:50%;' +
@@ -300,7 +306,27 @@
         button.disabled = false;
     }
 
+    var DEFAULT_BUTTON_SELECTORS = [
+        '.embeddedMessagingConversationButtonWrapper',
+        '#embeddedMessagingConversationButton',
+        'button.embeddedMessagingConversationButton'
+    ];
+
+    function concealDefaultButtonElements() {
+        for (var i = 0; i < DEFAULT_BUTTON_SELECTORS.length; i++) {
+            var nodes = document.querySelectorAll(DEFAULT_BUTTON_SELECTORS[i]);
+            for (var j = 0; j < nodes.length; j++) {
+                nodes[j].style.setProperty('display', 'none', 'important');
+                nodes[j].style.setProperty('visibility', 'hidden', 'important');
+                nodes[j].style.setProperty('opacity', '0', 'important');
+                nodes[j].style.setProperty('pointer-events', 'none', 'important');
+            }
+        }
+    }
+
     function hideDefaultSalesforceButton() {
+        concealDefaultButtonElements();
+
         var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
         if (api && typeof api.hideChatButton === 'function') {
             try {
@@ -309,6 +335,38 @@
                 console.warn('[Goodyear Chat] hideChatButton failed:', err);
             }
         }
+
+        // Salesforce re-shows its default launcher after minimize; hide it again on the next ticks.
+        setTimeout(concealDefaultButtonElements, 0);
+        setTimeout(concealDefaultButtonElements, 50);
+        setTimeout(function () {
+            concealDefaultButtonElements();
+            if (api && typeof api.hideChatButton === 'function') {
+                try {
+                    api.hideChatButton();
+                } catch (err) {}
+            }
+        }, 250);
+    }
+
+    function startDefaultButtonObserver() {
+        if (window.goodyearDefaultButtonObserver) {
+            return;
+        }
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', startDefaultButtonObserver);
+            return;
+        }
+
+        window.goodyearDefaultButtonObserver = new MutationObserver(function () {
+            concealDefaultButtonElements();
+        });
+        window.goodyearDefaultButtonObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
+        });
     }
 
     function launchGoodyearChat() {
@@ -359,6 +417,7 @@
     injectStyles();
     applyMobileClass();
     ensureCustomButton();
+    startDefaultButtonObserver();
 
     window.addEventListener('resize', applyMobileClass);
     window.addEventListener('orientationchange', applyMobileClass);
