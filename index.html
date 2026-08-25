@@ -16,6 +16,39 @@
 		return isPhoneUa || isNarrowViewport;
 	}
 
+	function hideSalesforceChatButton() {
+		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+		if (!api || typeof api.hideChatButton !== 'function') {
+			return;
+		}
+		try {
+			var result = api.hideChatButton();
+			if (result && typeof result.catch === 'function') {
+				result.catch(function () {});
+			}
+		} catch (err) {
+			console.warn('[Goodyear Chat] hideChatButton failed:', err);
+		}
+	}
+
+	function keepSalesforceChatButtonHidden() {
+		hideSalesforceChatButton();
+		var attempts = 0;
+		var timer = setInterval(function () {
+			hideSalesforceChatButton();
+			attempts += 1;
+			if (attempts >= 15) {
+				clearInterval(timer);
+			}
+		}, 200);
+	}
+
+	// Hide the default Salesforce button for the life of the page (API only).
+	window.addEventListener('onEmbeddedMessagingButtonCreated', keepSalesforceChatButtonHidden);
+	window.addEventListener('onEmbeddedMessagingWindowMinimized', keepSalesforceChatButtonHidden);
+	window.addEventListener('onEmbeddedMessagingWindowClosed', keepSalesforceChatButtonHidden);
+	window.addEventListener('onEmbeddedMessagingConversationClosed', keepSalesforceChatButtonHidden);
+
 	function initEmbeddedMessaging() {
 		if (!document.body) {
 			document.addEventListener('DOMContentLoaded', initEmbeddedMessaging);
@@ -222,8 +255,9 @@
 })();
 
 // =======================================================================
-// FEATURE 4: Custom launcher button (hide Salesforce default, launchChat API)
-// Desktop 60px, mobile 44px. Salesforce's default button cannot be resized.
+// FEATURE 4: Custom launcher (Salesforce default button hidden via API)
+// hideChatButtonOnLoad + utilAPI.hideChatButton(). Custom button is 60px
+// desktop / 44px mobile and calls launchChat().
 // =======================================================================
 (function initGoodyearCustomChatButton() {
     if (window.goodyearCustomChatButtonInitialized) {
@@ -255,12 +289,6 @@
         style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
-            '.embeddedMessagingConversationButtonWrapper,' +
-            '#embeddedMessagingConversationButton,' +
-            'button.embeddedMessagingConversationButton{' +
-            'display:none !important;visibility:hidden !important;' +
-            'opacity:0 !important;pointer-events:none !important;' +
-            '}' +
             '#' + BUTTON_ID + '{' +
             'position:fixed;z-index:2147483000;right:30px;bottom:25px;' +
             'width:60px;height:60px;padding:0;border:0;border-radius:50%;' +
@@ -306,27 +334,11 @@
         button.disabled = false;
     }
 
-    var DEFAULT_BUTTON_SELECTORS = [
-        '.embeddedMessagingConversationButtonWrapper',
-        '#embeddedMessagingConversationButton',
-        'button.embeddedMessagingConversationButton'
-    ];
-
-    function concealDefaultButtonElements() {
-        for (var i = 0; i < DEFAULT_BUTTON_SELECTORS.length; i++) {
-            var nodes = document.querySelectorAll(DEFAULT_BUTTON_SELECTORS[i]);
-            for (var j = 0; j < nodes.length; j++) {
-                nodes[j].style.setProperty('display', 'none', 'important');
-                nodes[j].style.setProperty('visibility', 'hidden', 'important');
-                nodes[j].style.setProperty('opacity', '0', 'important');
-                nodes[j].style.setProperty('pointer-events', 'none', 'important');
-            }
+    function hideDefaultButton() {
+        if (typeof keepSalesforceChatButtonHidden === 'function') {
+            keepSalesforceChatButtonHidden();
+            return;
         }
-    }
-
-    function hideDefaultSalesforceButton() {
-        concealDefaultButtonElements();
-
         var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
         if (api && typeof api.hideChatButton === 'function') {
             try {
@@ -335,38 +347,6 @@
                 console.warn('[Goodyear Chat] hideChatButton failed:', err);
             }
         }
-
-        // Salesforce re-shows its default launcher after minimize; hide it again on the next ticks.
-        setTimeout(concealDefaultButtonElements, 0);
-        setTimeout(concealDefaultButtonElements, 50);
-        setTimeout(function () {
-            concealDefaultButtonElements();
-            if (api && typeof api.hideChatButton === 'function') {
-                try {
-                    api.hideChatButton();
-                } catch (err) {}
-            }
-        }, 250);
-    }
-
-    function startDefaultButtonObserver() {
-        if (window.goodyearDefaultButtonObserver) {
-            return;
-        }
-        if (!document.body) {
-            document.addEventListener('DOMContentLoaded', startDefaultButtonObserver);
-            return;
-        }
-
-        window.goodyearDefaultButtonObserver = new MutationObserver(function () {
-            concealDefaultButtonElements();
-        });
-        window.goodyearDefaultButtonObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
-        });
     }
 
     function launchGoodyearChat() {
@@ -417,13 +397,12 @@
     injectStyles();
     applyMobileClass();
     ensureCustomButton();
-    startDefaultButtonObserver();
 
     window.addEventListener('resize', applyMobileClass);
     window.addEventListener('orientationchange', applyMobileClass);
 
     window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
-        hideDefaultSalesforceButton();
+        hideDefaultButton();
         showCustomButton();
     });
 
@@ -432,17 +411,17 @@
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
-        hideDefaultSalesforceButton();
+        hideDefaultButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
-        hideDefaultSalesforceButton();
+        hideDefaultButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
-        hideDefaultSalesforceButton();
+        hideDefaultButton();
         showCustomButton();
     });
 })();
