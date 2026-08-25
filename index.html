@@ -11,9 +11,7 @@
 <script type='text/javascript'>
 	function goodyearIsMobileBrowser() {
 		var ua = navigator.userAgent || '';
-		var isPhoneUa = /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(ua);
-		var isNarrowViewport = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
-		return isPhoneUa || isNarrowViewport;
+		return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
 	}
 
 	function hideSalesforceChatButton() {
@@ -272,8 +270,7 @@
             return goodyearIsMobileBrowser();
         }
         var ua = navigator.userAgent || '';
-        return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(ua)
-            || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
     }
 
     function applyMobileClass() {
@@ -298,8 +295,7 @@
             '}' +
             '.embedded-messaging > .embeddedMessagingFrame.isMinimized,' +
             '.embeddedMessaging > .embeddedMessagingFrame.isMinimized,' +
-            'iframe.embeddedMessagingFrame.isMinimized,' +
-            'iframe.embeddedMessagingFrame:not(.isMaximized){' +
+            'iframe.embeddedMessagingFrame.isMinimized{' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
             '}' +
@@ -316,12 +312,7 @@
             'html.gy-chat-is-mobile #' + BUTTON_ID + '{' +
             'width:44px;height:44px;right:12px;bottom:12px;' +
             '}' +
-            'html.gy-chat-is-mobile #' + BUTTON_ID + ' svg{width:20px;height:20px;}' +
-            '@media (max-width:768px){#' + BUTTON_ID + '{' +
-            'width:44px;height:44px;right:12px;bottom:12px;' +
-            '}' +
-            '#' + BUTTON_ID + ' svg{width:20px;height:20px;}' +
-            '}'
+            'html.gy-chat-is-mobile #' + BUTTON_ID + ' svg{width:20px;height:20px;}'
         ));
         (document.head || document.documentElement).appendChild(style);
     }
@@ -375,17 +366,11 @@
         var i;
         var nodes = root.querySelectorAll(DEFAULT_BUTTON_SELECTORS.join(','));
         for (i = 0; i < nodes.length; i++) {
-            concealNode(nodes[i]);
-        }
-
-        if (!chatWindowIsOpen) {
-            var frames = root.querySelectorAll('iframe.embeddedMessagingFrame');
-            for (i = 0; i < frames.length; i++) {
-                var frame = frames[i];
-                if (!(frame.classList && frame.classList.contains('isMaximized'))) {
-                    concealNode(frame);
-                }
+            var node = nodes[i];
+            if (chatWindowIsOpen && node.classList && node.classList.contains('embeddedMessagingFrame')) {
+                continue;
             }
+            concealNode(node);
         }
 
         nodes = root.querySelectorAll('*');
@@ -463,12 +448,16 @@
             button.disabled = true;
         }
 
+        chatWindowIsOpen = true;
+        revealChatFrame();
+
         api.launchChat()
             .then(function () {
                 hideCustomButton();
             })
             .catch(function (error) {
                 console.error('[Goodyear Chat] launchChat failed:', error);
+                chatWindowIsOpen = false;
                 showCustomButton();
             });
     }
