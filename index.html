@@ -25,9 +25,8 @@
 		try {
 			embeddedservice_bootstrap.settings.language = 'en_US'; // For example, enter 'en' or 'en-US'
 			embeddedservice_bootstrap.settings.display = 'Chat with Support';
-			if (goodyearIsMobileBrowser()) {
-				embeddedservice_bootstrap.settings.chatButtonPosition = '12px,12px';
-			}
+			// Hide the default Salesforce launcher; a custom page button calls launchChat().
+			embeddedservice_bootstrap.settings.hideChatButtonOnLoad = true;
 			embeddedservice_bootstrap.init(
 				'00DTI000002wPxm',
 				'GY_Service_Chat_Support',
@@ -223,20 +222,16 @@
 })();
 
 // =======================================================================
-// FEATURE 4: Smaller chat launcher button on mobile browsers
+// FEATURE 4: Custom launcher button (hide Salesforce default, launchChat API)
+// Desktop 60px, mobile 44px. Salesforce's default button cannot be resized.
 // =======================================================================
-(function initGoodyearMobileChatButton() {
-    if (window.goodyearMobileChatButtonInitialized) {
+(function initGoodyearCustomChatButton() {
+    if (window.goodyearCustomChatButtonInitialized) {
         return;
     }
-    window.goodyearMobileChatButtonInitialized = true;
+    window.goodyearCustomChatButtonInitialized = true;
 
-    var MOBILE_SCALE = 0.72;
-    var BUTTON_SELECTORS = [
-        '.embeddedMessagingConversationButtonWrapper',
-        '#embeddedMessagingConversationButton',
-        '.embeddedMessagingConversationButton'
-    ];
+    var BUTTON_ID = 'gyCustomChatButton';
 
     function isMobileBrowser() {
         if (typeof goodyearIsMobileBrowser === 'function') {
@@ -247,60 +242,150 @@
             || (window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
     }
 
+    function applyMobileClass() {
+        document.documentElement.classList.toggle('gy-chat-is-mobile', isMobileBrowser());
+    }
+
     function injectStyles() {
-        if (document.getElementById('gy-chat-mobile-button-styles')) {
+        if (document.getElementById('gy-custom-chat-button-styles')) {
             return;
         }
 
         var style = document.createElement('style');
-        style.id = 'gy-chat-mobile-button-styles';
+        style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
-            'html.gy-chat-is-mobile .embeddedMessagingConversationButtonWrapper,' +
-            'html.gy-chat-is-mobile #embeddedMessagingConversationButton,' +
-            'html.gy-chat-is-mobile .embeddedMessagingConversationButton {' +
-            '  transform: scale(' + MOBILE_SCALE + ');' +
-            '  transform-origin: bottom right;' +
+            '#' + BUTTON_ID + '{' +
+            'position:fixed;z-index:2147483000;right:30px;bottom:25px;' +
+            'width:60px;height:60px;padding:0;border:0;border-radius:50%;' +
+            'background:#FFCC00;color:#111;cursor:pointer;' +
+            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:flex;' +
+            'align-items:center;justify-content:center;' +
+            '}' +
+            '#' + BUTTON_ID + ' svg{width:28px;height:28px;display:block;}' +
+            '#' + BUTTON_ID + '.is-hidden{display:none !important;}' +
+            '#' + BUTTON_ID + ':disabled{opacity:.7;cursor:wait;}' +
+            'html.gy-chat-is-mobile #' + BUTTON_ID + '{' +
+            'width:44px;height:44px;right:12px;bottom:12px;' +
+            '}' +
+            'html.gy-chat-is-mobile #' + BUTTON_ID + ' svg{width:20px;height:20px;}' +
+            '@media (max-width:768px){#' + BUTTON_ID + '{' +
+            'width:44px;height:44px;right:12px;bottom:12px;' +
+            '}' +
+            '#' + BUTTON_ID + ' svg{width:20px;height:20px;}' +
             '}'
         ));
         (document.head || document.documentElement).appendChild(style);
     }
 
-    function findButton() {
-        for (var i = 0; i < BUTTON_SELECTORS.length; i++) {
-            var el = document.querySelector(BUTTON_SELECTORS[i]);
-            if (el) {
-                return el;
-            }
-        }
-        return null;
+    function getCustomButton() {
+        return document.getElementById(BUTTON_ID);
     }
 
-    function applyMobileButtonSize() {
-        var mobile = isMobileBrowser();
-        document.documentElement.classList.toggle('gy-chat-is-mobile', mobile);
-
-        var button = findButton();
+    function showCustomButton() {
+        var button = getCustomButton();
         if (!button) {
             return;
         }
+        button.classList.remove('is-hidden');
+        button.disabled = false;
+    }
 
-        if (mobile) {
-            button.style.setProperty('transform', 'scale(' + MOBILE_SCALE + ')', 'important');
-            button.style.setProperty('transform-origin', 'bottom right', 'important');
-        } else {
-            button.style.removeProperty('transform');
-            button.style.removeProperty('transform-origin');
+    function hideCustomButton() {
+        var button = getCustomButton();
+        if (!button) {
+            return;
+        }
+        button.classList.add('is-hidden');
+        button.disabled = false;
+    }
+
+    function hideDefaultSalesforceButton() {
+        var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+        if (api && typeof api.hideChatButton === 'function') {
+            try {
+                api.hideChatButton();
+            } catch (err) {
+                console.warn('[Goodyear Chat] hideChatButton failed:', err);
+            }
         }
     }
 
-    injectStyles();
-    applyMobileButtonSize();
+    function launchGoodyearChat() {
+        var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+        var button = getCustomButton();
 
-    window.addEventListener('resize', applyMobileButtonSize);
-    window.addEventListener('orientationchange', applyMobileButtonSize);
-    window.addEventListener('onEmbeddedMessagingButtonCreated', applyMobileButtonSize);
-    window.addEventListener('onEmbeddedMessagingReady', applyMobileButtonSize);
+        if (!api || typeof api.launchChat !== 'function') {
+            console.error('[Goodyear Chat] launchChat is not available yet.');
+            return;
+        }
+
+        if (button) {
+            button.disabled = true;
+        }
+
+        api.launchChat()
+            .then(function () {
+                hideCustomButton();
+            })
+            .catch(function (error) {
+                console.error('[Goodyear Chat] launchChat failed:', error);
+                showCustomButton();
+            });
+    }
+
+    function ensureCustomButton() {
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', ensureCustomButton);
+            return;
+        }
+        if (getCustomButton()) {
+            return;
+        }
+
+        var button = document.createElement('button');
+        button.id = BUTTON_ID;
+        button.type = 'button';
+        button.className = 'is-hidden';
+        button.setAttribute('aria-label', 'Chat with Support');
+        button.innerHTML =
+            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+            '<path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8.4L4 20.5V6a2 2 0 0 1 2-2z"></path>' +
+            '</svg>';
+        button.addEventListener('click', launchGoodyearChat);
+        document.body.appendChild(button);
+    }
+
+    injectStyles();
+    applyMobileClass();
+    ensureCustomButton();
+
+    window.addEventListener('resize', applyMobileClass);
+    window.addEventListener('orientationchange', applyMobileClass);
+
+    window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+        hideDefaultSalesforceButton();
+        showCustomButton();
+    });
+
+    window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
+        hideCustomButton();
+    });
+
+    window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
+        hideDefaultSalesforceButton();
+        showCustomButton();
+    });
+
+    window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
+        hideDefaultSalesforceButton();
+        showCustomButton();
+    });
+
+    window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
+        hideDefaultSalesforceButton();
+        showCustomButton();
+    });
 })();
 </script>
 </body>
