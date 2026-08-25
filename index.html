@@ -9,6 +9,33 @@
     <h1>Hello World! This is my public test page.</h1>
 
 <script type='text/javascript'>
+	function goodyearIsMobileBrowser() {
+		var ua = navigator.userAgent || '';
+		return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+	}
+
+	function hideSalesforceChatButton() {
+		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+		if (!api || typeof api.hideChatButton !== 'function') {
+			return;
+		}
+		try {
+			var result = api.hideChatButton();
+			if (result && typeof result.catch === 'function') {
+				result.catch(function () {});
+			}
+		} catch (err) {
+			console.warn('[Goodyear Chat] hideChatButton failed:', err);
+		}
+	}
+
+	// Mobile: hide the default launcher on create and again after minimize.
+	// https://developer.salesforce.com/docs/service/messaging-web/guide/show-hide-chat.html
+	if (goodyearIsMobileBrowser()) {
+		window.addEventListener('onEmbeddedMessagingButtonCreated', hideSalesforceChatButton);
+		window.addEventListener('onEmbeddedMessagingWindowMinimized', hideSalesforceChatButton);
+	}
+
 	function initEmbeddedMessaging() {
 		if (!document.body) {
 			document.addEventListener('DOMContentLoaded', initEmbeddedMessaging);
@@ -18,6 +45,9 @@
 		try {
 			embeddedservice_bootstrap.settings.language = 'en_US'; // For example, enter 'en' or 'en-US'
 			embeddedservice_bootstrap.settings.display = 'Chat with Support';
+			if (goodyearIsMobileBrowser()) {
+				embeddedservice_bootstrap.settings.hideChatButtonOnLoad = true;
+			}
 			embeddedservice_bootstrap.init(
 				'00DTI000002wPxm',
 				'GY_Service_Chat_Support',
@@ -213,11 +243,13 @@
 })();
 
 // =======================================================================
-// FEATURE 4: Custom mobile launcher — paused while desktop is verified.
-// Desktop must use Salesforce's original "Start a Chat" button only.
+// FEATURE 4: Mobile-only small launcher.
+// Desktop is unchanged (Salesforce original button).
+// Pattern: hideChatButtonOnLoad + hideChatButton() + launchChat()
+// https://developer.salesforce.com/docs/service/messaging-web/guide/show-hide-chat.html
+// https://salesforce.stackexchange.com/questions/438449/hide-chat-button-in-messaging-web-not-working-unable-to-hide-standard-embedded
 // =======================================================================
 (function initGoodyearCustomChatButton() {
-    return;
     if (window.goodyearCustomChatButtonInitialized) {
         return;
     }
@@ -229,18 +261,6 @@
 
     var BUTTON_ID = 'gyCustomChatButton';
 
-    function isMobileBrowser() {
-        if (typeof goodyearIsMobileBrowser === 'function') {
-            return goodyearIsMobileBrowser();
-        }
-        var ua = navigator.userAgent || '';
-        return /Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-    }
-
-    function applyMobileClass() {
-        document.documentElement.classList.toggle('gy-chat-is-mobile', isMobileBrowser());
-    }
-
     function injectStyles() {
         if (document.getElementById('gy-custom-chat-button-styles')) {
             return;
@@ -250,17 +270,12 @@
         style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
-            '[class*="embeddedMessagingConversationButton"],' +
-            '[id*="embeddedMessagingConversationButton"],' +
             '.embeddedMessagingConversationButtonWrapper,' +
             '#embeddedMessagingConversationButton,' +
             'button.embeddedMessagingConversationButton{' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
-            'width:0 !important;height:0 !important;overflow:hidden !important;' +
             '}' +
-            '.embedded-messaging > .embeddedMessagingFrame.isMinimized,' +
-            '.embeddedMessaging > .embeddedMessagingFrame.isMinimized,' +
             'iframe.embeddedMessagingFrame.isMinimized{' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
@@ -288,10 +303,6 @@
         return !!(api && typeof api.launchChat === 'function');
     }
 
-    function isChatWindowMaximized() {
-        return !!document.querySelector('iframe.embeddedMessagingFrame.isMaximized, .embeddedMessagingFrame.isMaximized');
-    }
-
     function showCustomButton() {
         var button = getCustomButton();
         if (!button) {
@@ -310,142 +321,6 @@
         button.disabled = false;
     }
 
-    function syncLauncherVisibility() {
-        if (chatWindowIsOpen || isChatWindowMaximized()) {
-            hideCustomButton();
-            return;
-        }
-        showCustomButton();
-    }
-
-    var DEFAULT_BUTTON_SELECTORS = [
-        '[class*="embeddedMessagingConversationButton"]',
-        '[id*="embeddedMessagingConversationButton"]',
-        '.embeddedMessagingConversationButtonWrapper',
-        '#embeddedMessagingConversationButton',
-        'button.embeddedMessagingConversationButton',
-        '.embeddedMessagingFrame.isMinimized',
-        'iframe.embeddedMessagingFrame.isMinimized'
-    ];
-    var chatWindowIsOpen = false;
-
-    function concealNode(el) {
-        if (!el || !el.style) {
-            return;
-        }
-        if (el.id === BUTTON_ID || (el.closest && el.closest('#' + BUTTON_ID))) {
-            return;
-        }
-        el.style.setProperty('display', 'none', 'important');
-        el.style.setProperty('visibility', 'hidden', 'important');
-        el.style.setProperty('opacity', '0', 'important');
-        el.style.setProperty('pointer-events', 'none', 'important');
-    }
-
-    function isMaximizedFrame(el) {
-        return !!(el && el.classList && el.classList.contains('isMaximized'));
-    }
-
-    function walkAndConceal(root) {
-        if (!root || !root.querySelectorAll) {
-            return;
-        }
-
-        var i;
-        var nodes = root.querySelectorAll(DEFAULT_BUTTON_SELECTORS.join(','));
-        for (i = 0; i < nodes.length; i++) {
-            var node = nodes[i];
-            if (chatWindowIsOpen && node.classList && node.classList.contains('embeddedMessagingFrame')) {
-                continue;   
-            }
-            concealNode(node);
-        }
-
-        if (!chatWindowIsOpen) {
-            var frames = root.querySelectorAll('iframe.embeddedMessagingFrame, iframe[class*="embeddedMessaging"]');
-            for (i = 0; i < frames.length; i++) {
-                if (!isMaximizedFrame(frames[i])) {
-                    concealNode(frames[i]);
-                }
-            }
-
-            var labeled = root.querySelectorAll('button, a, [role="button"], div');
-            for (i = 0; i < labeled.length; i++) {
-                var el = labeled[i];
-                if (el.id === BUTTON_ID || (el.closest && el.closest('#' + BUTTON_ID))) {
-                    continue;
-                }
-                var label = ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || ''))
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                if (/^(start a chat|chat with support)$/i.test(label)) {
-                    concealNode(el);
-                }
-            }
-        }
-
-        nodes = root.querySelectorAll('*');
-        for (i = 0; i < nodes.length; i++) {
-            if (nodes[i].shadowRoot) {
-                walkAndConceal(nodes[i].shadowRoot);
-            }
-        }
-    }
-
-    function concealDefaultLaunchers() {
-        walkAndConceal(document);
-    }
-
-    function revealChatFrame() {
-        function walk(root) {
-            if (!root || !root.querySelectorAll) {
-                return;
-            }
-            var frames = root.querySelectorAll('iframe.embeddedMessagingFrame');
-            for (var i = 0; i < frames.length; i++) {
-                var frame = frames[i];
-                frame.style.removeProperty('display');
-                frame.style.removeProperty('visibility');
-                frame.style.removeProperty('opacity');
-                frame.style.removeProperty('pointer-events');
-            }
-            var nodes = root.querySelectorAll('*');
-            for (var j = 0; j < nodes.length; j++) {
-                if (nodes[j].shadowRoot) {
-                    walk(nodes[j].shadowRoot);
-                }
-            }
-        }
-        walk(document);
-    }
-
-    function hideDefaultButton() {
-        concealDefaultLaunchers();
-        if (typeof keepSalesforceChatButtonHidden === 'function') {
-            keepSalesforceChatButtonHidden();
-        }
-    }
-
-    function startDefaultLauncherObserver() {
-        if (window.goodyearDefaultButtonObserver) {
-            return;
-        }
-        if (!document.body) {
-            document.addEventListener('DOMContentLoaded', startDefaultLauncherObserver);
-            return;
-        }
-
-        window.goodyearDefaultButtonObserver = new MutationObserver(function () {
-            concealDefaultLaunchers();
-        });
-        window.goodyearDefaultButtonObserver.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
-        });
-    }
-
     function launchGoodyearChat() {
         var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
         var button = getCustomButton();
@@ -459,16 +334,12 @@
             button.disabled = true;
         }
 
-        chatWindowIsOpen = true;
-        revealChatFrame();
-
         api.launchChat()
             .then(function () {
                 hideCustomButton();
             })
             .catch(function (error) {
                 console.error('[Goodyear Chat] launchChat failed:', error);
-                chatWindowIsOpen = false;
                 showCustomButton();
             });
     }
@@ -492,12 +363,12 @@
             '</svg>';
         button.addEventListener('click', launchGoodyearChat);
         document.body.appendChild(button);
-        syncLauncherVisibility();
+        showCustomButton();
     }
 
     function waitForChatApi() {
         if (isLaunchApiReady()) {
-            syncLauncherVisibility();
+            showCustomButton();
             return;
         }
 
@@ -506,54 +377,43 @@
             attempts += 1;
             if (isLaunchApiReady() || attempts >= 40) {
                 clearInterval(timer);
-                syncLauncherVisibility();
+                showCustomButton();
             }
         }, 250);
     }
 
     injectStyles();
-    applyMobileClass();
     ensureCustomButton();
-    startDefaultLauncherObserver();
     waitForChatApi();
 
-    window.addEventListener('resize', applyMobileClass);
-    window.addEventListener('orientationchange', applyMobileClass);
-
     window.addEventListener('onEmbeddedMessagingReady', function () {
-        hideDefaultButton();
-        syncLauncherVisibility();
+        hideSalesforceChatButton();
+        showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
-        hideDefaultButton();
-        syncLauncherVisibility();
+        hideSalesforceChatButton();
+        showCustomButton();
     });
 
-    window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
-        chatWindowIsOpen = true;
-        revealChatFrame();
-        hideCustomButton();
-    });
+    window.addEventListener('onEmbeddedMessagingWindowMaximized', hideCustomButton);
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
-        chatWindowIsOpen = false;
-        hideDefaultButton();
+        hideSalesforceChatButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
-        chatWindowIsOpen = false;
-        hideDefaultButton();
+        hideSalesforceChatButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
-        chatWindowIsOpen = false;
-        hideDefaultButton();
+        hideSalesforceChatButton();
         showCustomButton();
     });
 })();
 </script>
 </body>
 </html>
+
