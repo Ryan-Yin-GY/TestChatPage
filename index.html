@@ -20,21 +20,95 @@
 		return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
 	}
 
+	function gyChatDebugDump(reason) {
+		var custom = document.getElementById('gyCustomChatButton');
+		var frames = document.querySelectorAll('iframe');
+		var messaging = document.querySelectorAll('[class*="embeddedMessaging"], [id*="embeddedMessaging"], .embedded-messaging, .embeddedMessaging');
+		var visible = [];
+		var i;
+
+		console.log('[GY Chat Debug] ===== ' + reason + ' =====');
+		console.log('[GY Chat Debug] mobile=', goodyearIsMobileBrowser(),
+			'html.gy-chat-is-mobile=', document.documentElement.classList.contains('gy-chat-is-mobile'),
+			'ua=', navigator.userAgent,
+			'viewport=', window.innerWidth + 'x' + window.innerHeight);
+		console.log('[GY Chat Debug] custom button present=', !!custom,
+			'custom hidden class=', !!(custom && custom.classList.contains('is-hidden')),
+			'custom display=', custom ? window.getComputedStyle(custom).display : 'n/a');
+
+		for (i = 0; i < messaging.length; i++) {
+			var el = messaging[i];
+			var cs = window.getComputedStyle(el);
+			var rect = el.getBoundingClientRect();
+			var info = {
+				tag: el.tagName,
+				id: el.id,
+				className: el.className && el.className.toString ? el.className.toString() : el.className,
+				display: cs.display,
+				visibility: cs.visibility,
+				opacity: cs.opacity,
+				w: Math.round(rect.width),
+				h: Math.round(rect.height),
+				right: Math.round(rect.right),
+				bottom: Math.round(rect.bottom),
+				title: el.getAttribute && el.getAttribute('title')
+			};
+			console.log('[GY Chat Debug] messaging node', info);
+			if (cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) !== 0 && rect.width > 0 && rect.height > 0) {
+				visible.push(info);
+			}
+		}
+
+		console.log('[GY Chat Debug] iframe count=', frames.length);
+		for (i = 0; i < frames.length; i++) {
+			var frame = frames[i];
+			var fcs = window.getComputedStyle(frame);
+			var frect = frame.getBoundingClientRect();
+			console.log('[GY Chat Debug] iframe', {
+				id: frame.id,
+				className: frame.className && frame.className.toString ? frame.className.toString() : frame.className,
+				title: frame.title,
+				display: fcs.display,
+				visibility: fcs.visibility,
+				opacity: fcs.opacity,
+				w: Math.round(frect.width),
+				h: Math.round(frect.height)
+			});
+		}
+
+		console.log('[GY Chat Debug] VISIBLE messaging nodes=', visible);
+	}
+
+	window.gyChatDebugDump = gyChatDebugDump;
+
 	function hideSalesforceChatButton() {
 		if (!goodyearIsMobileBrowser()) {
+			console.log('[GY Chat Debug] hideChatButton skipped (not mobile)');
 			return;
 		}
 		var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
 		if (!api || typeof api.hideChatButton !== 'function') {
+			console.warn('[GY Chat Debug] hideChatButton API not ready');
+			gyChatDebugDump('hideChatButton-api-missing');
 			return;
 		}
 		try {
+			console.log('[GY Chat Debug] calling hideChatButton()');
 			var result = api.hideChatButton();
-			if (result && typeof result.catch === 'function') {
-				result.catch(function () {});
+			if (result && typeof result.then === 'function') {
+				result.then(function (value) {
+					console.log('[GY Chat Debug] hideChatButton resolved', value);
+					gyChatDebugDump('after-hideChatButton-resolved');
+				}).catch(function (err) {
+					console.warn('[GY Chat Debug] hideChatButton rejected', err);
+					gyChatDebugDump('after-hideChatButton-rejected');
+				});
+			} else {
+				gyChatDebugDump('after-hideChatButton-sync');
 			}
 		} catch (err) {
-			console.warn('[Goodyear Chat] hideChatButton failed:', err);
+			console.warn('[GY Chat Debug] hideChatButton threw', err);
+			gyChatDebugDump('after-hideChatButton-threw');
 		}
 	}
 
@@ -55,8 +129,17 @@
 
 	// Mobile: hide the default launcher on create and again after minimize.
 	// https://developer.salesforce.com/docs/service/messaging-web/guide/show-hide-chat.html
-	window.addEventListener('onEmbeddedMessagingButtonCreated', hideSalesforceChatButton);
-	window.addEventListener('onEmbeddedMessagingWindowMinimized', hideSalesforceChatButton);
+	window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+		console.log('[GY Chat Debug] event onEmbeddedMessagingButtonCreated');
+		hideSalesforceChatButton();
+	});
+	window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
+		console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMinimized');
+		gyChatDebugDump('minimize-immediate');
+		hideSalesforceChatButton();
+		setTimeout(function () { gyChatDebugDump('minimize+300ms'); }, 300);
+		setTimeout(function () { gyChatDebugDump('minimize+1000ms'); }, 1000);
+	});
 
 	function initEmbeddedMessaging() {
 		if (!document.body) {
@@ -413,9 +496,10 @@
         }, 250);
     }
 
-    function applyMobileMode() {
+    function applyMobileMode(reason) {
         var mobile = isMobileBrowser();
         document.documentElement.classList.toggle('gy-chat-is-mobile', mobile);
+        console.log('[GY Chat Debug] applyMobileMode', reason || '', 'mobile=', mobile, 'chatWindowIsOpen=', chatWindowIsOpen);
 
         if (mobile) {
             ensureCustomButton();
@@ -426,6 +510,9 @@
                 hideCustomButton();
             } else {
                 showCustomButton();
+            }
+            if (typeof gyChatDebugDump === 'function') {
+                gyChatDebugDump('applyMobileMode:' + (reason || ''));
             }
             return;
         }
@@ -452,28 +539,41 @@
         }
     }
 
-    window.addEventListener('onEmbeddedMessagingReady', applyMobileMode);
+    window.addEventListener('onEmbeddedMessagingReady', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingReady');
+        applyMobileMode('ready');
+    });
 
-    window.addEventListener('onEmbeddedMessagingButtonCreated', applyMobileMode);
+    window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingButtonCreated (feature4)');
+        applyMobileMode('button-created');
+    });
 
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMaximized');
         chatWindowIsOpen = true;
         hideCustomButton();
+        if (typeof gyChatDebugDump === 'function') {
+            gyChatDebugDump('maximized');
+        }
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMinimized (feature4)');
         chatWindowIsOpen = false;
-        applyMobileMode();
+        applyMobileMode('minimized');
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingWindowClosed');
         chatWindowIsOpen = false;
-        applyMobileMode();
+        applyMobileMode('closed');
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
+        console.log('[GY Chat Debug] event onEmbeddedMessagingConversationClosed');
         chatWindowIsOpen = false;
-        applyMobileMode();
+        applyMobileMode('conversation-closed');
     });
 })();
 </script>
