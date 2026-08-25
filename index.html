@@ -389,7 +389,9 @@
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
             '}' +
-            'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.isMinimized{' +
+            'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.minimized,' +
+            'html.gy-chat-is-mobile iframe#embeddedMessagingFrame.minimized,' +
+            'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.mode-fab:not(.maximized){' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
             '}' +
@@ -435,6 +437,35 @@
         button.disabled = false;
     }
 
+    function hideMinimizedChatFrame() {
+        var frame = document.getElementById('embeddedMessagingFrame');
+        if (!frame || !frame.classList) {
+            return;
+        }
+        var isMinimizedFab = frame.classList.contains('minimized')
+            || (frame.classList.contains('mode-fab') && !frame.classList.contains('maximized'));
+        if (!isMinimizedFab) {
+            return;
+        }
+        frame.style.setProperty('display', 'none', 'important');
+        frame.style.setProperty('visibility', 'hidden', 'important');
+        frame.style.setProperty('opacity', '0', 'important');
+        frame.style.setProperty('pointer-events', 'none', 'important');
+        console.log('[GY Chat Debug] hid minimized FAB iframe', frame.className);
+    }
+
+    function revealChatFrame() {
+        var frame = document.getElementById('embeddedMessagingFrame');
+        if (!frame) {
+            return;
+        }
+        frame.style.removeProperty('display');
+        frame.style.removeProperty('visibility');
+        frame.style.removeProperty('opacity');
+        frame.style.removeProperty('pointer-events');
+        console.log('[GY Chat Debug] revealed chat iframe', frame.className);
+    }
+
     function launchGoodyearChat() {
         var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
         var button = getCustomButton();
@@ -447,6 +478,9 @@
         if (button) {
             button.disabled = true;
         }
+
+        revealChatFrame();
+        chatWindowIsOpen = true;
 
         api.launchChat()
             .then(function () {
@@ -510,6 +544,7 @@
                 hideCustomButton();
             } else {
                 showCustomButton();
+                hideMinimizedChatFrame();
             }
             if (typeof gyChatDebugDump === 'function') {
                 gyChatDebugDump('applyMobileMode:' + (reason || ''));
@@ -552,6 +587,7 @@
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMaximized');
         chatWindowIsOpen = true;
+        revealChatFrame();
         hideCustomButton();
         if (typeof gyChatDebugDump === 'function') {
             gyChatDebugDump('maximized');
