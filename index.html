@@ -303,7 +303,7 @@
             'position:fixed;z-index:2147483000;right:30px;bottom:25px;' +
             'width:60px;height:60px;padding:0;border:0;border-radius:50%;' +
             'background:#FFCC00;color:#111;cursor:pointer;' +
-            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:flex;' +
+            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:flex !important;' +
             'align-items:center;justify-content:center;' +
             '}' +
             '#' + BUTTON_ID + ' svg{width:28px;height:28px;display:block;}' +
@@ -321,13 +321,22 @@
         return document.getElementById(BUTTON_ID);
     }
 
+    function isLaunchApiReady() {
+        var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
+        return !!(api && typeof api.launchChat === 'function');
+    }
+
+    function isChatWindowMaximized() {
+        return !!document.querySelector('iframe.embeddedMessagingFrame.isMaximized, .embeddedMessagingFrame.isMaximized');
+    }
+
     function showCustomButton() {
         var button = getCustomButton();
         if (!button) {
             return;
         }
         button.classList.remove('is-hidden');
-        button.disabled = false;
+        button.disabled = !isLaunchApiReady();
     }
 
     function hideCustomButton() {
@@ -337,6 +346,14 @@
         }
         button.classList.add('is-hidden');
         button.disabled = false;
+    }
+
+    function syncLauncherVisibility() {
+        if (chatWindowIsOpen || isChatWindowMaximized()) {
+            hideCustomButton();
+            return;
+        }
+        showCustomButton();
     }
 
     var DEFAULT_BUTTON_SELECTORS = [
@@ -350,6 +367,9 @@
 
     function concealNode(el) {
         if (!el || !el.style) {
+            return;
+        }
+        if (el.id === BUTTON_ID || (el.closest && el.closest('#' + BUTTON_ID))) {
             return;
         }
         el.style.setProperty('display', 'none', 'important');
@@ -474,7 +494,6 @@
         var button = document.createElement('button');
         button.id = BUTTON_ID;
         button.type = 'button';
-        button.className = 'is-hidden';
         button.setAttribute('aria-label', 'Chat with Support');
         button.innerHTML =
             '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
@@ -482,20 +501,42 @@
             '</svg>';
         button.addEventListener('click', launchGoodyearChat);
         document.body.appendChild(button);
+        syncLauncherVisibility();
+    }
+
+    function waitForChatApi() {
+        if (isLaunchApiReady()) {
+            syncLauncherVisibility();
+            return;
+        }
+
+        var attempts = 0;
+        var timer = setInterval(function () {
+            attempts += 1;
+            if (isLaunchApiReady() || attempts >= 40) {
+                clearInterval(timer);
+                syncLauncherVisibility();
+            }
+        }, 250);
     }
 
     injectStyles();
     applyMobileClass();
     ensureCustomButton();
     startDefaultLauncherObserver();
+    waitForChatApi();
 
     window.addEventListener('resize', applyMobileClass);
     window.addEventListener('orientationchange', applyMobileClass);
 
-    window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
-        chatWindowIsOpen = false;
+    window.addEventListener('onEmbeddedMessagingReady', function () {
         hideDefaultButton();
-        showCustomButton();
+        syncLauncherVisibility();
+    });
+
+    window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+        hideDefaultButton();
+        syncLauncherVisibility();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
