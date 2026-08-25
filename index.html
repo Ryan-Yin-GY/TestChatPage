@@ -289,6 +289,20 @@
         style.id = 'gy-custom-chat-button-styles';
         style.type = 'text/css';
         style.appendChild(document.createTextNode(
+            '.embeddedMessagingConversationButtonWrapper,' +
+            '#embeddedMessagingConversationButton,' +
+            'button.embeddedMessagingConversationButton{' +
+            'display:none !important;visibility:hidden !important;' +
+            'opacity:0 !important;pointer-events:none !important;' +
+            'width:0 !important;height:0 !important;overflow:hidden !important;' +
+            '}' +
+            '.embedded-messaging > .embeddedMessagingFrame.isMinimized,' +
+            '.embeddedMessaging > .embeddedMessagingFrame.isMinimized,' +
+            'iframe.embeddedMessagingFrame.isMinimized,' +
+            'iframe.embeddedMessagingFrame:not(.isMaximized){' +
+            'display:none !important;visibility:hidden !important;' +
+            'opacity:0 !important;pointer-events:none !important;' +
+            '}' +
             '#' + BUTTON_ID + '{' +
             'position:fixed;z-index:2147483000;right:30px;bottom:25px;' +
             'width:60px;height:60px;padding:0;border:0;border-radius:50%;' +
@@ -334,19 +348,106 @@
         button.disabled = false;
     }
 
-    function hideDefaultButton() {
-        if (typeof keepSalesforceChatButtonHidden === 'function') {
-            keepSalesforceChatButtonHidden();
+    var DEFAULT_BUTTON_SELECTORS = [
+        '.embeddedMessagingConversationButtonWrapper',
+        '#embeddedMessagingConversationButton',
+        'button.embeddedMessagingConversationButton',
+        '.embeddedMessagingFrame.isMinimized',
+        'iframe.embeddedMessagingFrame.isMinimized'
+    ];
+    var chatWindowIsOpen = false;
+
+    function concealNode(el) {
+        if (!el || !el.style) {
             return;
         }
-        var api = window.embeddedservice_bootstrap && window.embeddedservice_bootstrap.utilAPI;
-        if (api && typeof api.hideChatButton === 'function') {
-            try {
-                api.hideChatButton();
-            } catch (err) {
-                console.warn('[Goodyear Chat] hideChatButton failed:', err);
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+
+    function walkAndConceal(root) {
+        if (!root || !root.querySelectorAll) {
+            return;
+        }
+
+        var i;
+        var nodes = root.querySelectorAll(DEFAULT_BUTTON_SELECTORS.join(','));
+        for (i = 0; i < nodes.length; i++) {
+            concealNode(nodes[i]);
+        }
+
+        if (!chatWindowIsOpen) {
+            var frames = root.querySelectorAll('iframe.embeddedMessagingFrame');
+            for (i = 0; i < frames.length; i++) {
+                var frame = frames[i];
+                if (!(frame.classList && frame.classList.contains('isMaximized'))) {
+                    concealNode(frame);
+                }
             }
         }
+
+        nodes = root.querySelectorAll('*');
+        for (i = 0; i < nodes.length; i++) {
+            if (nodes[i].shadowRoot) {
+                walkAndConceal(nodes[i].shadowRoot);
+            }
+        }
+    }
+
+    function concealDefaultLaunchers() {
+        walkAndConceal(document);
+    }
+
+    function revealChatFrame() {
+        function walk(root) {
+            if (!root || !root.querySelectorAll) {
+                return;
+            }
+            var frames = root.querySelectorAll('iframe.embeddedMessagingFrame');
+            for (var i = 0; i < frames.length; i++) {
+                var frame = frames[i];
+                frame.style.removeProperty('display');
+                frame.style.removeProperty('visibility');
+                frame.style.removeProperty('opacity');
+                frame.style.removeProperty('pointer-events');
+            }
+            var nodes = root.querySelectorAll('*');
+            for (var j = 0; j < nodes.length; j++) {
+                if (nodes[j].shadowRoot) {
+                    walk(nodes[j].shadowRoot);
+                }
+            }
+        }
+        walk(document);
+    }
+
+    function hideDefaultButton() {
+        concealDefaultLaunchers();
+        if (typeof keepSalesforceChatButtonHidden === 'function') {
+            keepSalesforceChatButtonHidden();
+        }
+    }
+
+    function startDefaultLauncherObserver() {
+        if (window.goodyearDefaultButtonObserver) {
+            return;
+        }
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', startDefaultLauncherObserver);
+            return;
+        }
+
+        window.goodyearDefaultButtonObserver = new MutationObserver(function () {
+            concealDefaultLaunchers();
+        });
+        window.goodyearDefaultButtonObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
+        });
     }
 
     function launchGoodyearChat() {
@@ -397,30 +498,37 @@
     injectStyles();
     applyMobileClass();
     ensureCustomButton();
+    startDefaultLauncherObserver();
 
     window.addEventListener('resize', applyMobileClass);
     window.addEventListener('orientationchange', applyMobileClass);
 
     window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+        chatWindowIsOpen = false;
         hideDefaultButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
+        chatWindowIsOpen = true;
+        revealChatFrame();
         hideCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
+        chatWindowIsOpen = false;
         hideDefaultButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
+        chatWindowIsOpen = false;
         hideDefaultButton();
         showCustomButton();
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
+        chatWindowIsOpen = false;
         hideDefaultButton();
         showCustomButton();
     });
