@@ -397,12 +397,11 @@
             '}' +
             '#' + BUTTON_ID + '{' +
             'position:fixed;z-index:2147483001;right:12px;bottom:12px;' +
-            'width:44px;height:44px;padding:0;border:0;border-radius:50%;' +
-            'background:#FFCC00;color:#111;cursor:pointer;' +
-            'box-shadow:0 4px 12px rgba(0,0,0,.28);display:none !important;' +
+            'width:44px;height:44px;padding:0;border:0;background:transparent;' +
+            'cursor:pointer;display:none !important;' +
             'align-items:center;justify-content:center;' +
             '}' +
-            '#' + BUTTON_ID + ' svg{width:20px;height:20px;display:block;}' +
+            '#' + BUTTON_ID + ' img{width:44px;height:44px;display:block;pointer-events:none;}' +
             'html.gy-chat-is-mobile #' + BUTTON_ID + '{display:flex !important;}' +
             'html.gy-chat-is-mobile #' + BUTTON_ID + '.is-hidden{display:none !important;}' +
             '#' + BUTTON_ID + ':disabled{opacity:.7;cursor:wait;}'
@@ -506,9 +505,7 @@
         button.type = 'button';
         button.setAttribute('aria-label', 'Chat with Support');
         button.innerHTML =
-            '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
-            '<path fill="currentColor" d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8.4L4 20.5V6a2 2 0 0 1 2-2z"></path>' +
-            '</svg>';
+            '<img src="gy-chat-button.png" width="44" height="44" alt="" aria-hidden="true">';
         button.addEventListener('click', launchGoodyearChat);
         document.body.appendChild(button);
         showCustomButton();
