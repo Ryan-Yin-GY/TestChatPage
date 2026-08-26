@@ -401,7 +401,7 @@
             'cursor:pointer;display:none !important;' +
             'align-items:center;justify-content:center;' +
             '}' +
-            '#' + BUTTON_ID + ' img{width:44px;height:44px;display:block;pointer-events:none;}' +
+            '#' + BUTTON_ID + ' svg{width:44px;height:44px;display:block;pointer-events:none;}' +
             'html.gy-chat-is-mobile #' + BUTTON_ID + '{display:flex !important;}' +
             'html.gy-chat-is-mobile #' + BUTTON_ID + '.is-hidden{display:none !important;}' +
             '#' + BUTTON_ID + ':disabled{opacity:.7;cursor:wait;}'
@@ -505,7 +505,12 @@
         button.type = 'button';
         button.setAttribute('aria-label', 'Chat with Support');
         button.innerHTML =
-            '<img src="gy-chat-button.png" width="44" height="44" alt="" aria-hidden="true">';
+            '<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">' +
+            '<ellipse cx="24" cy="43" rx="15" ry="2.2" fill="#000" opacity=".18"></ellipse>' +
+            '<circle cx="24" cy="23" r="18.2" fill="#fff" stroke="#00204E" stroke-width="1.5"></circle>' +
+            '<path fill="#00204E" d="M24 12.8c-6.5 0-11.8 4.55-11.8 10.15 0 2.38.9 4.57 2.42 6.3L13 34.2l5.15-2.05c1.75.62 3.7.96 5.85.96 6.5 0 11.8-4.55 11.8-10.16S30.5 12.8 24 12.8z"></path>' +
+            '<path fill="#fff" stroke="#fff" stroke-linecap="round" stroke-width="1.85" d="M17.6 19.6h12.2M17.6 23.15h12.2M17.6 26.7h7.4"></path>' +
+            '</svg>';
         button.addEventListener('click', launchGoodyearChat);
         document.body.appendChild(button);
         showCustomButton();
