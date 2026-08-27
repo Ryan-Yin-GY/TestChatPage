@@ -818,22 +818,6 @@
         button.disabled = false;
     }
 
-    function isChatWindowVisible() {
-        var frame = document.getElementById('embeddedMessagingFrame');
-        if (!frame) {
-            return false;
-        }
-        if (frame.classList.contains('maximized') && !frame.classList.contains('minimized')) {
-            return true;
-        }
-        var cs = window.getComputedStyle(frame);
-        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) {
-            return false;
-        }
-        var rect = frame.getBoundingClientRect();
-        return rect.height > 140;
-    }
-
     function isRestoredFabFrame(frame) {
         if (!frame || !frame.classList) {
             return false;
@@ -890,11 +874,6 @@
             return;
         }
         window.goodyearFabObserver = new MutationObserver(function () {
-            if (isChatWindowVisible()) {
-                chatWindowIsOpen = true;
-                hideCustomButton();
-                return;
-            }
             hideMinimizedChatFrame();
         });
         window.goodyearFabObserver.observe(document.body, {
@@ -1008,8 +987,7 @@
             if (typeof hideSalesforceChatButton === 'function') {
                 hideSalesforceChatButton();
             }
-            if (chatWindowIsOpen || isChatWindowVisible()) {
-                chatWindowIsOpen = true;
+            if (chatWindowIsOpen) {
                 hideCustomButton();
             } else {
                 showCustomButton();
@@ -1068,11 +1046,6 @@
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMinimized (feature4)');
-        if (isChatWindowVisible()) {
-            chatWindowIsOpen = true;
-            hideCustomButton();
-            return;
-        }
         chatWindowIsOpen = false;
         applyMobileMode('minimized');
     });
@@ -1085,13 +1058,10 @@
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingConversationClosed');
-        hideCustomButton();
-        if (isChatWindowVisible()) {
-            chatWindowIsOpen = true;
-        }
+        chatWindowIsOpen = false;
+        applyMobileMode('conversation-closed');
     });
 })();
 </script>
 </body>
 </html>
-
