@@ -744,6 +744,11 @@
     var BUTTON_ID = 'gyCustomChatButton';
     var chatWindowIsOpen = false;
     var conversationEndedWindowStillOpen = false;
+    var observedFabFrame = null;
+    var observedChatButton = null;
+    var fabAttrObserver = null;
+    var btnAttrObserver = null;
+    var fabAddObserver = null;
 
     function isMobileBrowser() {
         if (typeof goodyearIsMobileBrowser === 'function') {
@@ -840,15 +845,13 @@
         if (chatWindowIsOpen) {
             return false;
         }
-        if (frame.classList.contains('initial')) {
-            return false;
-        }
         if (frame.classList.contains('maximized') && !frame.classList.contains('minimized')) {
             return false;
         }
         if (frame.classList.contains('minimized')
             || frame.classList.contains('mode-fab')
-            || frame.classList.contains('state-minimized')) {
+            || frame.classList.contains('state-minimized')
+            || frame.classList.contains('initial')) {
             return true;
         }
 
@@ -860,69 +863,94 @@
         return rect.width > 20 && rect.height > 20 && rect.height < 140;
     }
 
+    function concealNode(el) {
+        if (!el || !el.style) {
+            return false;
+        }
+        if (el.style.getPropertyValue('display') === 'none') {
+            return false;
+        }
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+        return true;
+    }
+
     function hideMinimizedChatFrame() {
         if (!isMobileBrowser() || chatWindowIsOpen) {
             return;
         }
         var frame = document.getElementById('embeddedMessagingFrame');
-        if (!isRestoredFabFrame(frame)) {
-            return;
+        if (isRestoredFabFrame(frame) && concealNode(frame)) {
+            console.log('[GY Chat Debug] hid restored/minimized FAB iframe', frame.className);
         }
-        if (frame.style.getPropertyValue('display') === 'none') {
-            return;
-        }
-        frame.style.setProperty('display', 'none', 'important');
-        frame.style.setProperty('visibility', 'hidden', 'important');
-        frame.style.setProperty('opacity', '0', 'important');
-        frame.style.setProperty('pointer-events', 'none', 'important');
-        console.log('[GY Chat Debug] hid restored/minimized FAB iframe', frame.className);
+        concealNode(document.getElementById('embeddedMessagingConversationButton'));
+        concealNode(document.querySelector('.embeddedMessagingConversationButtonWrapper'));
+        bindLauncherObservers();
     }
 
     function scheduleHideRestoredFab() {
-        var delays = [0, 150, 400, 800, 1500, 3000];
+        var delays = [0, 150, 400, 800, 1500, 3000, 5000];
         var i;
         for (i = 0; i < delays.length; i++) {
             setTimeout(hideMinimizedChatFrame, delays[i]);
         }
     }
 
-    function bindFabFrameObserver(frame) {
-        if (!frame || frame === window.goodyearObservedFabFrame) {
-            return;
+    function bindNodeObserver(node, currentNode, observer) {
+        if (!node || node === currentNode) {
+            return { node: currentNode, observer: observer };
         }
-        window.goodyearObservedFabFrame = frame;
-        if (window.goodyearFabAttrObserver) {
-            window.goodyearFabAttrObserver.disconnect();
+        if (observer) {
+            observer.disconnect();
         }
-        window.goodyearFabAttrObserver = new MutationObserver(function () {
+        observer = new MutationObserver(function () {
             hideMinimizedChatFrame();
         });
-        window.goodyearFabAttrObserver.observe(frame, {
+        observer.observe(node, {
             attributes: true,
-            attributeFilter: ['class', 'hidden']
+            attributeFilter: ['class', 'style', 'hidden']
         });
+        return { node: node, observer: observer };
+    }
+
+    function bindLauncherObservers() {
+        var frameBind = bindNodeObserver(
+            document.getElementById('embeddedMessagingFrame'),
+            observedFabFrame,
+            fabAttrObserver
+        );
+        observedFabFrame = frameBind.node;
+        fabAttrObserver = frameBind.observer;
+
+        var buttonBind = bindNodeObserver(
+            document.getElementById('embeddedMessagingConversationButton'),
+            observedChatButton,
+            btnAttrObserver
+        );
+        observedChatButton = buttonBind.node;
+        btnAttrObserver = buttonBind.observer;
     }
 
     function startFabObserver() {
-        if (window.goodyearFabAddObserver) {
+        if (fabAddObserver) {
             return;
         }
         if (!document.body) {
             document.addEventListener('DOMContentLoaded', startFabObserver);
             return;
         }
-        window.goodyearFabAddObserver = new MutationObserver(function () {
-            var frame = document.getElementById('embeddedMessagingFrame');
-            if (frame) {
-                bindFabFrameObserver(frame);
-                hideMinimizedChatFrame();
-            }
+        fabAddObserver = new MutationObserver(function () {
+            bindLauncherObservers();
+            hideMinimizedChatFrame();
         });
-        window.goodyearFabAddObserver.observe(document.body, {
+        fabAddObserver.observe(document.body, {
             childList: true,
             subtree: true
         });
-        bindFabFrameObserver(document.getElementById('embeddedMessagingFrame'));
+        bindLauncherObservers();
+        hideMinimizedChatFrame();
     }
 
     function revealChatFrame() {
