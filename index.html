@@ -1058,8 +1058,13 @@
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingConversationClosed');
-        chatWindowIsOpen = false;
-        applyMobileMode('conversation-closed');
+        var frame = document.getElementById('embeddedMessagingFrame');
+        var windowStillOpen = !!(frame && frame.classList && frame.classList.contains('maximized'));
+        if (windowStillOpen) {
+            chatWindowIsOpen = true;
+            hideCustomButton();
+            return;
+        }
     });
 })();
 </script>
