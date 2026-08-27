@@ -743,6 +743,7 @@
 
     var BUTTON_ID = 'gyCustomChatButton';
     var chatWindowIsOpen = false;
+    var conversationEndedWindowStillOpen = false;
 
     function isMobileBrowser() {
         if (typeof goodyearIsMobileBrowser === 'function') {
@@ -818,11 +819,28 @@
         button.disabled = false;
     }
 
+    function isChatWindowVisible() {
+        if (conversationEndedWindowStillOpen) {
+            return true;
+        }
+        var frame = document.getElementById('embeddedMessagingFrame');
+        if (!frame || !frame.classList) {
+            return false;
+        }
+        if (frame.classList.contains('initial')) {
+            return false;
+        }
+        return frame.classList.contains('maximized') && !frame.classList.contains('minimized');
+    }
+
     function isRestoredFabFrame(frame) {
         if (!frame || !frame.classList) {
             return false;
         }
         if (chatWindowIsOpen) {
+            return false;
+        }
+        if (frame.classList.contains('initial')) {
             return false;
         }
         if (frame.classList.contains('maximized') && !frame.classList.contains('minimized')) {
@@ -850,6 +868,9 @@
         if (!isRestoredFabFrame(frame)) {
             return;
         }
+        if (frame.style.getPropertyValue('display') === 'none') {
+            return;
+        }
         frame.style.setProperty('display', 'none', 'important');
         frame.style.setProperty('visibility', 'hidden', 'important');
         frame.style.setProperty('opacity', '0', 'important');
@@ -865,23 +886,43 @@
         }
     }
 
+    function bindFabFrameObserver(frame) {
+        if (!frame || frame === window.goodyearObservedFabFrame) {
+            return;
+        }
+        window.goodyearObservedFabFrame = frame;
+        if (window.goodyearFabAttrObserver) {
+            window.goodyearFabAttrObserver.disconnect();
+        }
+        window.goodyearFabAttrObserver = new MutationObserver(function () {
+            hideMinimizedChatFrame();
+        });
+        window.goodyearFabAttrObserver.observe(frame, {
+            attributes: true,
+            attributeFilter: ['class', 'hidden']
+        });
+    }
+
     function startFabObserver() {
-        if (window.goodyearFabObserver) {
+        if (window.goodyearFabAddObserver) {
             return;
         }
         if (!document.body) {
             document.addEventListener('DOMContentLoaded', startFabObserver);
             return;
         }
-        window.goodyearFabObserver = new MutationObserver(function () {
-            hideMinimizedChatFrame();
+        window.goodyearFabAddObserver = new MutationObserver(function () {
+            var frame = document.getElementById('embeddedMessagingFrame');
+            if (frame) {
+                bindFabFrameObserver(frame);
+                hideMinimizedChatFrame();
+            }
         });
-        window.goodyearFabObserver.observe(document.body, {
+        window.goodyearFabAddObserver.observe(document.body, {
             childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style', 'hidden']
+            subtree: true
         });
+        bindFabFrameObserver(document.getElementById('embeddedMessagingFrame'));
     }
 
     function revealChatFrame() {
@@ -978,6 +1019,9 @@
     }
 
     function applyMobileMode(reason) {
+        if (reason && typeof reason !== 'string') {
+            reason = 'viewport';
+        }
         var mobile = isMobileBrowser();
         document.documentElement.classList.toggle('gy-chat-is-mobile', mobile);
         console.log('[GY Chat Debug] applyMobileMode', reason || '', 'mobile=', mobile, 'chatWindowIsOpen=', chatWindowIsOpen);
@@ -987,14 +1031,15 @@
             if (typeof hideSalesforceChatButton === 'function') {
                 hideSalesforceChatButton();
             }
-            if (chatWindowIsOpen) {
+            if (chatWindowIsOpen || isChatWindowVisible()) {
+                chatWindowIsOpen = true;
                 hideCustomButton();
             } else {
                 showCustomButton();
                 hideMinimizedChatFrame();
             }
-            if (typeof gyChatDebugDump === 'function') {
-                gyChatDebugDump('applyMobileMode:' + (reason || ''));
+            if (reason && reason !== 'viewport' && typeof gyChatDebugDump === 'function') {
+                gyChatDebugDump('applyMobileMode:' + reason);
             }
             return;
         }
@@ -1036,6 +1081,7 @@
 
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMaximized');
+        conversationEndedWindowStillOpen = false;
         chatWindowIsOpen = true;
         revealChatFrame();
         hideCustomButton();
@@ -1046,22 +1092,26 @@
 
     window.addEventListener('onEmbeddedMessagingWindowMinimized', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingWindowMinimized (feature4)');
+        conversationEndedWindowStillOpen = false;
         chatWindowIsOpen = false;
         applyMobileMode('minimized');
     });
 
     window.addEventListener('onEmbeddedMessagingWindowClosed', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingWindowClosed');
+        conversationEndedWindowStillOpen = false;
         chatWindowIsOpen = false;
         applyMobileMode('closed');
     });
 
     window.addEventListener('onEmbeddedMessagingConversationClosed', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingConversationClosed');
-        chatWindowIsOpen = false;
-        applyMobileMode('conversation-closed');
+        conversationEndedWindowStillOpen = true;
+        chatWindowIsOpen = true;
+        hideCustomButton();
     });
 })();
 </script>
 </body>
 </html>
+
