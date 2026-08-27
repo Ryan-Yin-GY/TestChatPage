@@ -772,6 +772,7 @@
             '}' +
             'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.minimized,' +
             'html.gy-chat-is-mobile iframe#embeddedMessagingFrame.minimized,' +
+            'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.state-minimized,' +
             'html.gy-chat-is-mobile iframe.embeddedMessagingFrame.mode-fab:not(.maximized){' +
             'display:none !important;visibility:hidden !important;' +
             'opacity:0 !important;pointer-events:none !important;' +
@@ -817,21 +818,70 @@
         button.disabled = false;
     }
 
-    function hideMinimizedChatFrame() {
-        var frame = document.getElementById('embeddedMessagingFrame');
+    function isRestoredFabFrame(frame) {
         if (!frame || !frame.classList) {
+            return false;
+        }
+        if (chatWindowIsOpen) {
+            return false;
+        }
+        if (frame.classList.contains('maximized') && !frame.classList.contains('minimized')) {
+            return false;
+        }
+        if (frame.classList.contains('minimized')
+            || frame.classList.contains('mode-fab')
+            || frame.classList.contains('state-minimized')) {
+            return true;
+        }
+
+        var cs = window.getComputedStyle(frame);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) {
+            return false;
+        }
+        var rect = frame.getBoundingClientRect();
+        return rect.width > 20 && rect.height > 20 && rect.height < 140;
+    }
+
+    function hideMinimizedChatFrame() {
+        if (!isMobileBrowser() || chatWindowIsOpen) {
             return;
         }
-        var isMinimizedFab = frame.classList.contains('minimized')
-            || (frame.classList.contains('mode-fab') && !frame.classList.contains('maximized'));
-        if (!isMinimizedFab) {
+        var frame = document.getElementById('embeddedMessagingFrame');
+        if (!isRestoredFabFrame(frame)) {
             return;
         }
         frame.style.setProperty('display', 'none', 'important');
         frame.style.setProperty('visibility', 'hidden', 'important');
         frame.style.setProperty('opacity', '0', 'important');
         frame.style.setProperty('pointer-events', 'none', 'important');
-        console.log('[GY Chat Debug] hid minimized FAB iframe', frame.className);
+        console.log('[GY Chat Debug] hid restored/minimized FAB iframe', frame.className);
+    }
+
+    function scheduleHideRestoredFab() {
+        var delays = [0, 150, 400, 800, 1500, 3000];
+        var i;
+        for (i = 0; i < delays.length; i++) {
+            setTimeout(hideMinimizedChatFrame, delays[i]);
+        }
+    }
+
+    function startFabObserver() {
+        if (window.goodyearFabObserver) {
+            return;
+        }
+        if (!document.body) {
+            document.addEventListener('DOMContentLoaded', startFabObserver);
+            return;
+        }
+        window.goodyearFabObserver = new MutationObserver(function () {
+            hideMinimizedChatFrame();
+        });
+        window.goodyearFabObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'style', 'hidden']
+        });
     }
 
     function revealChatFrame() {
@@ -958,6 +1008,7 @@
     injectStyles();
     ensureCustomButton();
     applyMobileMode();
+    startFabObserver();
     waitForChatApi();
 
     window.addEventListener('resize', applyMobileMode);
@@ -974,11 +1025,13 @@
     window.addEventListener('onEmbeddedMessagingReady', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingReady');
         applyMobileMode('ready');
+        scheduleHideRestoredFab();
     });
 
     window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingButtonCreated (feature4)');
         applyMobileMode('button-created');
+        scheduleHideRestoredFab();
     });
 
     window.addEventListener('onEmbeddedMessagingWindowMaximized', function () {
