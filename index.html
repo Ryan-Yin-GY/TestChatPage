@@ -389,16 +389,16 @@
     </footer>
 
 
+<script src="https://cdn.jsdelivr.net/npm/bowser@2.11.0/es5.js"></script>
 <script type='text/javascript'>
 	function goodyearIsMobileBrowser() {
-		var ua = navigator.userAgent || '';
-		if (/Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
-			return true;
+		var BowserLib = window.bowser;
+		if (!BowserLib || typeof BowserLib.getParser !== 'function') {
+			return false;
 		}
-		if (navigator.userAgentData && navigator.userAgentData.mobile === true) {
-			return true;
-		}
-		return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+		var browser = BowserLib.getParser(window.navigator.userAgent);
+		var platformType = browser.getPlatformType();
+		return platformType === BowserLib.PLATFORMS_MAP.mobile;
 	}
 
 	function gyChatDebugDump(reason) {
@@ -409,7 +409,16 @@
 		var i;
 
 		console.log('[GY Chat Debug] ===== ' + reason + ' =====');
+		var platformType = '';
+		try {
+			if (window.bowser && typeof window.bowser.getParser === 'function') {
+				platformType = window.bowser.getParser(window.navigator.userAgent).getPlatformType();
+			}
+		} catch (err) {
+			platformType = 'unknown';
+		}
 		console.log('[GY Chat Debug] mobile=', goodyearIsMobileBrowser(),
+			'platformType=', platformType,
 			'html.gy-chat-is-mobile=', document.documentElement.classList.contains('gy-chat-is-mobile'),
 			'ua=', navigator.userAgent,
 			'viewport=', window.innerWidth + 'x' + window.innerHeight);
@@ -548,6 +557,7 @@
 	};
 </script>
 <script type='text/javascript' src='https://goodyearmvp--elevatedev.sandbox.my.site.com/ESWGYServiceChatSuppor1785345568001/assets/js/bootstrap.min.js' onload='initEmbeddedMessaging()'></script>
+
 <script type='text/javascript'>
 (function () {
     // Prevent the script from initializing multiple times
@@ -753,11 +763,13 @@
         if (typeof goodyearIsMobileBrowser === 'function') {
             return goodyearIsMobileBrowser();
         }
-        var ua = navigator.userAgent || '';
-        if (/Android.+Mobile|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
-            return true;
+        var BowserLib = window.bowser;
+        if (!BowserLib || typeof BowserLib.getParser !== 'function') {
+            return false;
         }
-        return !!(window.matchMedia && window.matchMedia('(max-width: 768px)').matches);
+        var browser = BowserLib.getParser(window.navigator.userAgent);
+        var platformType = browser.getPlatformType();
+        return platformType === BowserLib.PLATFORMS_MAP.mobile;
     }
 
     function injectStyles() {
@@ -1082,17 +1094,6 @@
     applyMobileMode();
     startFabObserver();
     waitForChatApi();
-
-    window.addEventListener('resize', applyMobileMode);
-    window.addEventListener('orientationchange', applyMobileMode);
-    if (window.matchMedia) {
-        var mobileQuery = window.matchMedia('(max-width: 768px)');
-        if (mobileQuery.addEventListener) {
-            mobileQuery.addEventListener('change', applyMobileMode);
-        } else if (mobileQuery.addListener) {
-            mobileQuery.addListener(applyMobileMode);
-        }
-    }
 
     window.addEventListener('onEmbeddedMessagingReady', function () {
         console.log('[GY Chat Debug] event onEmbeddedMessagingReady');
