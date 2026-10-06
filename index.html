@@ -660,6 +660,131 @@
     });
 
     console.log('[Goodyear Chat Relay] Initialized with auto-message and LWC listener.');
+// =======================================================================
+    // FEATURE 2B: After last user input for 2 minutes, send [Ending Chat]
+    // Restored from Aug 11, 2026 chat (171b6cf8): idle timer keys off last
+    // end-user message, not session Inactive status.
+    // =======================================================================
+    var userIdleEndChatTimer = null;
+    var USER_IDLE_END_CHAT_DELAY_MS = 2 * 60 * 1000; // 2 minutes
+    var SYSTEM_RELAY_MESSAGES = {
+        '[Initializing Main Menu...]': true,
+        '[unsubscribe]': true,
+        '[Ending Chat]': true,
+        'Ending Chat': true
+    };
+
+    function clearUserIdleEndChatTimer() {
+        if (userIdleEndChatTimer) {
+            clearTimeout(userIdleEndChatTimer);
+            userIdleEndChatTimer = null;
+        }
+    }
+
+    function resetUserIdleEndChatTimer() {
+        clearUserIdleEndChatTimer();
+        console.log('[Goodyear Chat Relay] User message received. Starting 2-minute end-chat timer.');
+        userIdleEndChatTimer = setTimeout(function () {
+            userIdleEndChatTimer = null;
+            console.log('[Goodyear Chat Relay] User idle timer elapsed. Sending [Ending Chat]...');
+            sendEndingChatMessage();
+        }, USER_IDLE_END_CHAT_DELAY_MS);
+    }
+
+    function sendEndingChatMessage() {
+        clearUserIdleEndChatTimer();
+        waitForSendTextMessage(function (sendTextMessage) {
+            sendTextMessage
+                .call(window.embeddedservice_bootstrap.utilAPI, '[Ending Chat]')
+                .then(function () {
+                    console.log('[Goodyear Chat Relay] [Ending Chat] message sent successfully.');
+                })
+                .catch(function (error) {
+                    console.error('[Goodyear Chat Relay] [Ending Chat] message failed:', error);
+                });
+        });
+    }
+
+    function getMessageText(detail) {
+        try {
+            var entryPayload = detail && detail.conversationEntry && detail.conversationEntry.entryPayload;
+            var payload = typeof entryPayload === 'string' ? JSON.parse(entryPayload) : entryPayload;
+            if (!payload) {
+                return '';
+            }
+            if (payload.abstractMessage && payload.abstractMessage.staticContent) {
+                return String(payload.abstractMessage.staticContent.text || '').trim();
+            }
+            if (payload.message && payload.message.staticContent) {
+                return String(payload.message.staticContent.text || '').trim();
+            }
+            if (payload.text) {
+                return String(payload.text).trim();
+            }
+            return '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function isEndUserSender(detail) {
+        var sender = detail && detail.conversationEntry && detail.conversationEntry.sender;
+        var role = sender && sender.role;
+        if (!role) {
+            return false;
+        }
+        var normalizedRole = String(role).toLowerCase().replace(/\s+/g, '');
+        return normalizedRole === 'enduser' || normalizedRole === 'end-user';
+    }
+
+    window.addEventListener('onEmbeddedMessageSent', function (event) {
+        try {
+            var detail = event.detail || {};
+            if (!isEndUserSender(detail)) {
+                return;
+            }
+
+            var messageText = getMessageText(detail);
+            if (messageText && SYSTEM_RELAY_MESSAGES[messageText]) {
+                console.log('[Goodyear Chat Relay] Ignoring system relay message for idle timer:', messageText);
+                return;
+            }
+
+            resetUserIdleEndChatTimer();
+        } catch (error) {
+            console.error('[Goodyear Chat Relay] Failed to handle message sent event:', error);
+        }
+    });
+
+    window.addEventListener('onEmbeddedMessagingSessionStatusUpdate', function (event) {
+        try {
+            var detail = event.detail || {};
+            var entryPayload = detail.conversationEntry && detail.conversationEntry.entryPayload;
+            var sessionData = typeof entryPayload === 'string'
+                ? JSON.parse(entryPayload)
+                : entryPayload;
+            var sessionStatus = sessionData && sessionData.sessionStatus;
+
+            console.log('[Goodyear Chat Relay] Session status update:', sessionStatus);
+
+            if (!sessionStatus) {
+                return;
+            }
+
+            var normalizedStatus = String(sessionStatus).toLowerCase();
+            if (normalizedStatus === 'ended') {
+                if (userIdleEndChatTimer) {
+                    console.log('[Goodyear Chat Relay] Clearing user idle end-chat timer due to status: ended');
+                }
+                clearUserIdleEndChatTimer();
+            }
+        } catch (error) {
+            console.error('[Goodyear Chat Relay] Failed to handle session status update:', error);
+        }
+    });
+
+    console.log('[Goodyear Chat Relay] Initialized with auto-message, LWC listener, and user-idle end-chat timer.');
+	
 })();
 
 // =======================================================================
