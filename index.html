@@ -660,12 +660,14 @@
     });
 
     console.log('[Goodyear Chat Relay] Initialized with auto-message and LWC listener.');
-// =======================================================================
+    // =======================================================================
     // FEATURE 2B: After last user input for 2 minutes, send [Ending Chat]
     // Restored from Aug 11, 2026 chat (171b6cf8): idle timer keys off last
     // end-user message, not session Inactive status.
     // =======================================================================
     var userIdleEndChatTimer = null;
+    var endingChatSent = false;
+    var sessionEnded = false;
     var USER_IDLE_END_CHAT_DELAY_MS = 2 * 60 * 1000; // 2 minutes
     var SYSTEM_RELAY_MESSAGES = {
         '[Initializing Main Menu...]': true,
@@ -681,25 +683,51 @@
         }
     }
 
+    function shouldSkipEndingChat(reason) {
+        if (sessionEnded || endingChatSent) {
+            console.log('[Goodyear Chat Relay] Skipping [Ending Chat]. ' + reason);
+            return true;
+        }
+        return false;
+    }
+
     function resetUserIdleEndChatTimer() {
         clearUserIdleEndChatTimer();
+        if (shouldSkipEndingChat('Session is ended or ending chat was already sent.')) {
+            return;
+        }
         console.log('[Goodyear Chat Relay] User message received. Starting 2-minute end-chat timer.');
         userIdleEndChatTimer = setTimeout(function () {
             userIdleEndChatTimer = null;
-            console.log('[Goodyear Chat Relay] User idle timer elapsed. Sending [ending chat]...');
+            if (shouldSkipEndingChat('Session ended or ending chat was already sent before the timer elapsed.')) {
+                return;
+            }
+            console.log('[Goodyear Chat Relay] User idle timer elapsed. Sending [Ending Chat]...');
             sendEndingChatMessage();
         }, USER_IDLE_END_CHAT_DELAY_MS);
     }
 
     function sendEndingChatMessage() {
         clearUserIdleEndChatTimer();
+        if (shouldSkipEndingChat('Session is ended or ending chat was already sent.')) {
+            return;
+        }
+        // Claim the send immediately so a later message or timer cannot send it again.
+        endingChatSent = true;
         waitForSendTextMessage(function (sendTextMessage) {
+            if (sessionEnded) {
+                console.log('[Goodyear Chat Relay] Skipping [Ending Chat]. Session ended before send.');
+                return;
+            }
             sendTextMessage
-                .call(window.embeddedservice_bootstrap.utilAPI, 'ending chat')
+                .call(window.embeddedservice_bootstrap.utilAPI, '[Ending Chat]')
                 .then(function () {
                     console.log('[Goodyear Chat Relay] [Ending Chat] message sent successfully.');
                 })
                 .catch(function (error) {
+                    if (!sessionEnded) {
+                        endingChatSent = false;
+                    }
                     console.error('[Goodyear Chat Relay] [Ending Chat] message failed:', error);
                 });
         });
@@ -773,9 +801,15 @@
 
             var normalizedStatus = String(sessionStatus).toLowerCase();
             if (normalizedStatus === 'ended') {
+                sessionEnded = true;
                 if (userIdleEndChatTimer) {
                     console.log('[Goodyear Chat Relay] Clearing user idle end-chat timer due to status: ended');
                 }
+                clearUserIdleEndChatTimer();
+            } else if (sessionEnded) {
+                // A later live status means a new messaging session started.
+                sessionEnded = false;
+                endingChatSent = false;
                 clearUserIdleEndChatTimer();
             }
         } catch (error) {
