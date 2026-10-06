@@ -686,7 +686,7 @@
         console.log('[Goodyear Chat Relay] User message received. Starting 2-minute end-chat timer.');
         userIdleEndChatTimer = setTimeout(function () {
             userIdleEndChatTimer = null;
-            console.log('[Goodyear Chat Relay] User idle timer elapsed. Sending [Ending Chat]...');
+            console.log('[Goodyear Chat Relay] User idle timer elapsed. Sending [ending chat]...');
             sendEndingChatMessage();
         }, USER_IDLE_END_CHAT_DELAY_MS);
     }
